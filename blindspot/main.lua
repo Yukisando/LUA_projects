@@ -32,5 +32,4 @@ function love.draw()
 		iterrator = 0
 	end
 	reset()
-
 end
