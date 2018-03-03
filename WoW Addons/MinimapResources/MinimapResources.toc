@@ -1,0 +1,7 @@
+## Interface: 70300
+## Title: MinimapResources
+## Version: 0.8
+## Notes: Changes the texture of Resource nods on the minimap.
+## Author: Yukisan & PhyisicsHaiku
+## URL: www.nathandecastro.uk
+MinimapResources.lua

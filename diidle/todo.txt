@@ -1,0 +1,6 @@
+Todo:
+
+Slider for line width
+fix silder update
+Selection tool?
+multiple layers
