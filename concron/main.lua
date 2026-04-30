@@ -9,6 +9,18 @@ local currentFrame_cry = 1
 local elapsedTime = 0
 local elapsedTime_cry = 0
 
+-- Reference frame rate the original game was tuned at.
+local REF_FPS = 60
+
+local function read_highscore()
+	local data = love.filesystem.read("highscore.txt")
+	local n = tonumber(data)
+	return n or 0
+end
+
+local function write_highscore(n)
+	love.filesystem.write("highscore.txt", tostring(n))
+end
 
 function love.load()
 	start()
@@ -17,45 +29,47 @@ function love.load()
 	line_1 = HEIGHT / 2 - line_seperation
 	line_2 = HEIGHT / 2 + line_seperation
 
-	f = love.filesystem.newFile("highscore.txt")
 	pause = false
 	lose = false
 	block_hit = false
 	block_hit_index = 0
 
 	time = 0
-	speed = 15
-	iter = 0
-	iter_block = 0
-	delay = 30 + (love.math.random() * 15)
+	-- Original used 15 px/frame at 60fps -> 900 px/s.
+	speed = 15 * REF_FPS
+	-- Speed ramp: 0.01 px/frame increment at 60fps -> 36 px/s^2.
+	speed_accel = 0.01 * REF_FPS * REF_FPS
+
+	-- Spawn timing in seconds (originally counted in frames at 60fps).
+	spawn_timer = 0
+	spawn_delay = (30 + love.math.random() * 15) / REF_FPS
 	spawn = false
+	line_change = false
 
 	--Player
-	player = {	size = 50,
-	lives = 3,
-	x = 200,
-	y = line_2 - 50,
-	color = {0, 0, 0, 0}
-}
+	player = {
+		size = 50,
+		lives = 3,
+		x = 200,
+		y = line_2 - 50,
+		color = {0, 0, 0, 0},
+		-- Original: 15 px/frame at 60fps -> 900 px/s.
+		vy = 15 * REF_FPS,
+	}
 
 	--Blocks
 	blocks = {}
 	function blocks:new(x, y, size, color)
-		local size = size
-		local x = x
-		local y = y
-		local color = color
-		local new_block = {x = x, y = y, size = size, color = color}
-		table.insert(blocks, new_block)
+		table.insert(blocks, {x = x, y = y, size = size, color = color})
 	end
-	
+
 	--Begin
 	score = 0
-	level_color = {0, 0, 0, 200}
-	blocks:new(WIDTH, line_1, 60, {50, 255, 0})
-	highscore = love.filesystem.read("highscore.txt")
+	level_color = {0, 0, 0, 200/255}
+	blocks:new(WIDTH, line_1, 60, {50/255, 1, 0})
+	highscore = read_highscore()
 	sprite_flipped = false
-	
+
 	new_quote = true
 	selected_quote = "RIP"
 
@@ -70,88 +84,74 @@ function love.load()
 	connor_dead = love.graphics.newImage("data/img/connor_dead.png")
 	connor_flipped = love.graphics.newImage("data/img/connor_flipped.png")
 	connor_cry = love.graphics.newImage("data/img/connor_cry.png")
-	connor_cry_width, connor_cry_height = connor_cry:getDimensions( )
+	connor_cry_width, connor_cry_height = connor_cry:getDimensions()
 
-	frames[1] = love.graphics.newQuad(0,0,64,64,connor:getDimensions())
-	frames[2] = love.graphics.newQuad(64,0,64,64,connor:getDimensions())
-	frames[3] = love.graphics.newQuad(0,64,64,64,connor:getDimensions())
-	frames[4] = love.graphics.newQuad(64,64,64,64,connor:getDimensions())
+	frames[1] = love.graphics.newQuad(0,  0,  64, 64, connor:getDimensions())
+	frames[2] = love.graphics.newQuad(64, 0,  64, 64, connor:getDimensions())
+	frames[3] = love.graphics.newQuad(0,  64, 64, 64, connor:getDimensions())
+	frames[4] = love.graphics.newQuad(64, 64, 64, 64, connor:getDimensions())
 
-
-	frames[1] = love.graphics.newQuad(0,0,64,64,connor_flipped:getDimensions())
-	frames[2] = love.graphics.newQuad(64,0,64,64,connor_flipped:getDimensions())
-	frames[3] = love.graphics.newQuad(0,64,64,64,connor_flipped:getDimensions())
-	frames[4] = love.graphics.newQuad(64,64,64,64,connor_flipped:getDimensions())
-
-	frames[1] = love.graphics.newQuad(0,0,64,64,connor_dead:getDimensions())
-	frames[2] = love.graphics.newQuad(64,0,64,64,connor_dead:getDimensions())
-	frames[3] = love.graphics.newQuad(0,64,64,64,connor_dead:getDimensions())
-	frames[4] = love.graphics.newQuad(64,64,64,64,connor_dead:getDimensions())
-
-	frames_cry[1] = love.graphics.newQuad(0,0,64,64,connor_cry:getDimensions())
-	frames_cry[2] = love.graphics.newQuad(64,0,64,64,connor_cry:getDimensions())
-	frames_cry[3] = love.graphics.newQuad(0,64,64,64,connor_cry:getDimensions())
-	frames_cry[4] = love.graphics.newQuad(64,64,64,64,connor_cry:getDimensions())
+	frames_cry[1] = love.graphics.newQuad(0,  0,  64, 64, connor_cry:getDimensions())
+	frames_cry[2] = love.graphics.newQuad(64, 0,  64, 64, connor_cry:getDimensions())
+	frames_cry[3] = love.graphics.newQuad(0,  64, 64, 64, connor_cry:getDimensions())
+	frames_cry[4] = love.graphics.newQuad(64, 64, 64, 64, connor_cry:getDimensions())
 
 	activeFrame = frames[currentFrame]
 	activeFrame_cry = frames_cry[currentFrame_cry]
 end
 
 function love.update(dt)
-	update()
+	-- Clamp dt so a stutter doesn't teleport the player into a block.
+	if dt > 1/30 then dt = 1/30 end
+
+	update(dt)
 	elapsedTime = elapsedTime + dt
 	elapsedTime_cry = elapsedTime_cry + dt
 
-	if(elapsedTime > 0.1) and not pause then
-		if(currentFrame < 4) then
-			currentFrame = currentFrame + 1
-		else
-			currentFrame = 1
-		end
+	if (elapsedTime > 0.1) and not pause then
+		currentFrame = currentFrame % 4 + 1
 		activeFrame = frames[currentFrame]
 		elapsedTime = 0
 	end
 
-	if(elapsedTime_cry > 0.3) and not pause then
-		if(currentFrame_cry < 4) then
-			currentFrame_cry = currentFrame_cry + 1
-		else
-			currentFrame_cry = 1
-		end
+	if (elapsedTime_cry > 0.3) and not pause then
+		currentFrame_cry = currentFrame_cry % 4 + 1
 		activeFrame_cry = frames_cry[currentFrame_cry]
 		elapsedTime_cry = 0
 	end
 
 	if love.keyboard.isDown('p') and not pause and not lose then
 		pause = true
-		elseif love.keyboard.isDown('space') and pause then
-			pause = false
-		end
+	elseif love.keyboard.isDown('space') and pause then
+		pause = false
+	end
 
-		speed = speed + 0.01
+	if not pause and not lose then
+		speed = speed + speed_accel * dt
 		line_1 = HEIGHT / 2 - line_seperation
 		line_2 = HEIGHT / 2 + line_seperation
 
-		if not pause and not lose then
-			time = time + love.timer.getDelta()
-			score = math.floor(time * 4)
-		end
+		time = time + dt
+		score = math.floor(time * 4)
+	end
 
 	--Block logic
 	if not pause and not lose then
 		if spawn then
 			local size = 50 + love.math.random() * 70 + line_seperation / 10
-			local side_picker = love.math.random() 
+			local side_picker = love.math.random()
 
-			if side_picker <= 0.49 then 
-				blocks:new(WIDTH, line_1, size, {0, 255, 0})
-			else 
-				blocks:new(WIDTH, line_2 - size, size, {0, 255, 0})
+			if side_picker <= 0.49 then
+				blocks:new(WIDTH, line_1, size, {0, 1, 0})
+			else
+				blocks:new(WIDTH, line_2 - size, size, {0, 1, 0})
 			end
-			if delay > 20 then delay = delay - 0.5 else 
-				delay = 40
+			if spawn_delay > 20/REF_FPS then
+				spawn_delay = spawn_delay - 0.5/REF_FPS
+			else
+				spawn_delay = 40/REF_FPS
 				line_change = true
-				if player.lives < 3 then 
+				if player.lives < 3 then
 					cracker_1_scale = 0
 					cracker_2_scale = 0
 					cracker_3_scale = 0
@@ -161,10 +161,10 @@ function love.update(dt)
 		end
 
 		spawn = false
-		iter = iter + 1
-		if iter > delay and spawn == false then
+		spawn_timer = spawn_timer + dt
+		if spawn_timer > spawn_delay then
 			spawn = true
-			iter = 0
+			spawn_timer = 0
 		end
 
 		if line_change then
@@ -172,9 +172,9 @@ function love.update(dt)
 			line_change = false
 		end
 
-		--Block removal
+		--Block movement
 		for i = 1, #blocks do
-			blocks[i].x = blocks[i].x - speed
+			blocks[i].x = blocks[i].x - speed * dt
 		end
 
 		if blocks[1] ~= nil then
@@ -187,19 +187,15 @@ function love.update(dt)
 
 	--Player position Logic
 	if not pause and not lose then
-		if (love.keyboard.isDown("space") or click) and player.y > line_1 then
+		local up = love.keyboard.isDown("space") or click
+		if up then
 			sprite_flipped = true
-			player.y = player.y - 15
-		end
-		if (love.keyboard.isDown("space") or click) and player.y < line_1 then
-			player.y = line_1
-		end
-		if (not love.keyboard.isDown("space") and not click) and player.y + player.size < line_2 then
+			player.y = player.y - player.vy * dt
+			if player.y < line_1 then player.y = line_1 end
+		else
 			sprite_flipped = false
-			player.y = player.y + 15
-		end
-		if (not love.keyboard.isDown("space") and not click) and player.y + player.size > line_2 then
-			player.y = line_2 - player.size
+			player.y = player.y + player.vy * dt
+			if player.y + player.size > line_2 then player.y = line_2 - player.size end
 		end
 	end
 
@@ -209,9 +205,9 @@ function love.update(dt)
 			block_hit = true
 			block_hit_index = i
 
-			if not lose then 
+			if not lose then
 				player.lives = player.lives - 1
-				love.system.vibrate(0.2)
+				if love.system.vibrate then love.system.vibrate(0.2) end
 				cracker_1_scale = 0
 				cracker_2_scale = 0
 				cracker_3_scale = 0
@@ -223,12 +219,9 @@ function love.update(dt)
 		end
 	end
 
-	if OS ~= "Android" then
-		if lose and score > tonumber(highscore) then
-			f:open("w")
-			f:write(score)
-			f:close()
-		end
+	if lose and score > (tonumber(highscore) or 0) then
+		write_highscore(score)
+		highscore = score
 	end
 end
 
@@ -246,54 +239,43 @@ function love.draw()
 	end
 
 	if not lose then
-		love.graphics.setColor(255, 255, 255)
-		
-		if player.lives > 0 then 
-			love.graphics.draw(cracker_1, player.x - 20, line_1 - 100 - math.sin(iterrator), cracker_1_scale, cracker_1_scale)
-			if cracker_1_scale < 1 then
-				cracker_1_scale = cracker_1_scale + 0.1 
-			else
-				cracker_1_scale = 1
-			end
+		love.graphics.setColor(1, 1, 1)
+		local dt = love.timer.getDelta()
+
+		if player.lives > 0 then
+			love.graphics.draw(cracker_1, player.x - 20, line_1 - 100 - math.sin(iterrator), 0, cracker_1_scale, cracker_1_scale)
+			if cracker_1_scale < 1 then cracker_1_scale = math.min(1, cracker_1_scale + 6 * dt) end
 		end
-		if player.lives > 1 then 
-			love.graphics.draw(cracker_2, player.x + 30, line_1 - 100 - math.sin(iterrator), cracker_2_scale, cracker_2_scale)
-			if cracker_2_scale < 1 then
-				cracker_2_scale = cracker_2_scale + 0.1 
-			else
-				cracker_2_scale = 1
-			end
+		if player.lives > 1 then
+			love.graphics.draw(cracker_2, player.x + 30, line_1 - 100 - math.sin(iterrator), 0, cracker_2_scale, cracker_2_scale)
+			if cracker_2_scale < 1 then cracker_2_scale = math.min(1, cracker_2_scale + 6 * dt) end
 		end
-		if player.lives > 2 then 
-			love.graphics.draw(cracker_3, player.x + 80, line_1 - 100 - math.sin(iterrator), cracker_3_scale, cracker_3_scale)
-			if cracker_3_scale < 1 then
-				cracker_3_scale = cracker_3_scale + 0.1 
-			else
-				cracker_3_scale = 1
-			end
+		if player.lives > 2 then
+			love.graphics.draw(cracker_3, player.x + 80, line_1 - 100 - math.sin(iterrator), 0, cracker_3_scale, cracker_3_scale)
+			if cracker_3_scale < 1 then cracker_3_scale = math.min(1, cracker_3_scale + 6 * dt) end
 		end
 
 		if not sprite_flipped then
 			love.graphics.draw(connor, activeFrame,
-				player.x - (select(3,activeFrame:getViewport())/2 - 25),
-				player.y - (select(4,activeFrame:getViewport())/2 - 20), 0, 1, 1)
+				player.x - (select(3, activeFrame:getViewport())/2 - 25),
+				player.y - (select(4, activeFrame:getViewport())/2 - 20), 0, 1, 1)
 		else
-			love.graphics.draw(connor_flipped,activeFrame,
-				player.x - (select(3,activeFrame:getViewport())/2 - 25),
-				player.y - (select(4,activeFrame:getViewport())/2 - 30), 0, 1, 1)
+			love.graphics.draw(connor_flipped, activeFrame,
+				player.x - (select(3, activeFrame:getViewport())/2 - 25),
+				player.y - (select(4, activeFrame:getViewport())/2 - 30), 0, 1, 1)
 		end
 	end
 
 	if lose then
-		love.graphics.setColor(255, 255, 255)
-		love.graphics.draw(connor_dead,activeFrame,
-			player.x - (select(3,activeFrame:getViewport())/2 - 13),
-			player.y - (select(4,activeFrame:getViewport())/2 - 20), 0, 1, 1)
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.draw(connor_dead, activeFrame,
+			player.x - (select(3, activeFrame:getViewport())/2 - 13),
+			player.y - (select(4, activeFrame:getViewport())/2 - 20), 0, 1, 1)
 
-		love.graphics.setColor(255, 255, 255)
-		love.graphics.draw(connor_cry,activeFrame_cry,
-			WIDTH - connor_cry_width * 2 - 30 - (select(3,activeFrame_cry:getViewport())/2),
-			HEIGHT - connor_cry_height * 2 + 50 - (select(4,activeFrame_cry:getViewport())/2), 0, 4, 4)
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.draw(connor_cry, activeFrame_cry,
+			WIDTH - connor_cry_width * 2 - 30 - (select(3, activeFrame_cry:getViewport())/2),
+			HEIGHT - connor_cry_height * 2 + 50 - (select(4, activeFrame_cry:getViewport())/2), 0, 4, 4)
 	end
 
 	--HUD
@@ -320,77 +302,75 @@ function love.draw()
 	if pause then
 		love.graphics.setColor(0, 0, 0)
 		love.graphics.print("PAUSE", WIDTH / 2, HEIGHT / 2)
-		love.graphics.print("Score: " .. score .. " | High score: " .. highscore, WIDTH / 2, HEIGHT / 2 + 100, 0, 1.3, 1.3)
-		love.graphics.print("'C'lear", WIDTH / 2, HEIGHT / 2  + 200, 0, 1.3, 1.3)
-		love.graphics.print("'P'ause?", WIDTH / 2, HEIGHT / 2  + 250, 0, 1.3, 1.3)
+		love.graphics.print("Score: " .. score .. " | High score: " .. tostring(highscore), WIDTH / 2, HEIGHT / 2 + 100, 0, 1.3, 1.3)
+		love.graphics.print("'C'lear", WIDTH / 2, HEIGHT / 2 + 200, 0, 1.3, 1.3)
+		love.graphics.print("'P'ause?", WIDTH / 2, HEIGHT / 2 + 250, 0, 1.3, 1.3)
 		love.graphics.print("'Q'uit?", WIDTH / 2, HEIGHT / 2 + 300, 0, 1.3, 1.3)
 	end
 	if lose then
 		love.graphics.setColor(0, 0, 0)
 		love.graphics.print(quote(), WIDTH / 2, HEIGHT / 2)
-		
+
 		if OS == "Android" then
 			love.graphics.print("Tap to restart", WIDTH / 2, HEIGHT / 2 + 200, 0, 1.3, 1.3)
 			love.graphics.print("Score: " .. score, WIDTH / 2, HEIGHT / 2 + 100, 0, 1.3, 1.3)
 		else
-			love.graphics.print("Score: " .. score .. " | High score: " .. highscore, WIDTH / 2, HEIGHT / 2 + 100, 0, 1.3, 1.3)
+			love.graphics.print("Score: " .. score .. " | High score: " .. tostring(highscore), WIDTH / 2, HEIGHT / 2 + 100, 0, 1.3, 1.3)
 			love.graphics.print("'R'estart?", WIDTH / 2, HEIGHT / 2 + 200, 0, 1.3, 1.3)
 			love.graphics.print("'Q'uit?", WIDTH / 2, HEIGHT / 2 + 250, 0, 1.3, 1.3)
 		end
 
-
-		if block_hit then
-			for i = 1, #blocks do
-				love.graphics.setColor(200, 0, 0)
-				love.graphics.rectangle("line", blocks[block_hit_index].x, blocks[block_hit_index].y, blocks[block_hit_index].size, blocks[block_hit_index].size)
-			end
+		if block_hit and blocks[block_hit_index] then
+			love.graphics.setColor(200/255, 0, 0)
+			local b = blocks[block_hit_index]
+			love.graphics.rectangle("line", b.x, b.y, b.size, b.size)
 		end
-		love.graphics.setColor(0, 200, 0)
+		love.graphics.setColor(0, 200/255, 0)
 	end
 end
 
 
 function quote()
-	quotes = {
-	"CONtinue?",
-	"You CONked out",
-	"CONtrole your timing!",
-	"You've been disCONtinued",
-	"DeCONstructed",
-	"UnCONtrolable",
-	"OverCONfident?",
-	"InCONceivably high score",
-	"CONsiderable effort",
-	"InCONsistent score",
-	"You're unCONscious, try again?",
-	"CONfused?",
-	"CONgratulations!",
-	"New CONtender?",
-	"My CONdolences",
-	"CONtent with that score?",
-	"iCONic!",
-	"Have you tried turning it off and on again?",
-	"I can't eat that.",
-	"Could you stir this for me?",
-	"Mini metro?",
-	"As far as insects go I think ants are very attractive",
-	"Papers please",
-	"I actually like the taste of vodka",
-	"Would you like a seaweed cracker?",
-	"I could take a look at that for you",
-	"Watch out for the honey pot",
-	"They found a rat in the deep fryer at work"
-}
+	local quotes = {
+		"CONtinue?",
+		"You CONked out",
+		"CONtrole your timing!",
+		"You've been disCONtinued",
+		"DeCONstructed",
+		"UnCONtrolable",
+		"OverCONfident?",
+		"InCONceivably high score",
+		"CONsiderable effort",
+		"InCONsistent score",
+		"You're unCONscious, try again?",
+		"CONfused?",
+		"CONgratulations!",
+		"New CONtender?",
+		"My CONdolences",
+		"CONtent with that score?",
+		"iCONic!",
+		"Have you tried turning it off and on again?",
+		"I can't eat that.",
+		"Could you stir this for me?",
+		"Mini metro?",
+		"As far as insects go I think ants are very attractive",
+		"Papers please",
+		"I actually like the taste of vodka",
+		"Would you like a seaweed cracker?",
+		"I could take a look at that for you",
+		"Watch out for the honey pot",
+		"They found a rat in the deep fryer at work"
+	}
 
-if new_quote then
-	selected_quote = quotes[love.math.random(1, #quotes)]
-	new_quote = false
-end
-return selected_quote
+	if new_quote then
+		selected_quote = quotes[love.math.random(1, #quotes)]
+		new_quote = false
+	end
+	return selected_quote
 end
 
 function love.keypressed(key)
-	if key == 'q' then
+	if key == 'q' or key == "escape" then
 		love.event.quit()
 	end
 
@@ -398,10 +378,6 @@ function love.keypressed(key)
 		love.load()
 	end
 
-	if key == "escape" then
-		love.event.quit()
-	end
-	
 	if key == 'r' then
 		love.load()
 	end
@@ -411,11 +387,9 @@ function love.keypressed(key)
 	end
 
 	if key == 'c' then
-		f:open("w")
-		f:write(1)
-		f:close()
+		write_highscore(0)
+		highscore = 0
 	end
-
 end
 
 function love.mousepressed(x, y, button)

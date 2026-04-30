@@ -1,5 +1,10 @@
 function love.conf(t)
+	t.identity = "concron"
+	t.version = "11.5"
 	t.window = nil
+	t.modules.joystick = false
+	t.modules.physics = false
+	t.modules.video = false
 end
 
 function start()
@@ -11,7 +16,7 @@ function start()
 	else
 		love.window.setMode(1920, 1080, {fullscreen = true, fullscreentype = "desktop", msaa = 8, display = 1, highdpi = true})
 	end
-	love.graphics.setBackgroundColor(230, 230, 230)
+	love.graphics.setBackgroundColor(230/255, 230/255, 230/255)
 	comfortana = love.graphics.newFont("data/fonts/comfortana.ttf", 40)
 	comfortana_t = love.graphics.newFont("data/fonts/comfortana.ttf", 100)
 	wrap_limit = 1000
@@ -21,31 +26,34 @@ function start()
 	WIDTH = love.graphics.getWidth()
 	W_MID = WIDTH / 2
 	H_MID = HEIGHT / 2
-	random_color = love.math.random() * 200
+	random_color = love.math.random() * 200/255
 	MOUSE_PRESSED = 0
 	iterrator = 0.0
 end
 
-function update()
+-- Time-based update of shared globals. dt is in seconds.
+function update(dt)
+	dt = dt or love.timer.getDelta()
 	MOUSE_X = love.mouse.getX()
 	MOUSE_Y = love.mouse.getY()
 	MOUSE_PRESS = love.mouse.isDown(1)
-	random_color =  love.math.random() * 200
-	iterrator = iterrator + 0.5
+	random_color = love.math.random() * 200/255
+	-- Original ran at ~60 fps and incremented by 0.5/frame -> 30 rad/s
+	iterrator = iterrator + 30 * dt
 
 	if MOUSE_PRESS and MOUSE_PRESSED == 0 then
 		MOUSE_PRESSED = 1
-		elseif MOUSE_PRESS and MOUSE_PRESSED >= 1 then
-			MOUSE_PRESSED = 2
-			elseif not MOUSE_PRESS then
-				MOUSE_PRESSED = 0
-			end
-		end
+	elseif MOUSE_PRESS and MOUSE_PRESSED >= 1 then
+		MOUSE_PRESSED = 2
+	elseif not MOUSE_PRESS then
+		MOUSE_PRESSED = 0
+	end
+end
 
 
 function reset()
 	love.graphics.setLineWidth(1)
-	love.graphics.setColor(255, 255, 255)
+	love.graphics.setColor(1, 1, 1)
 	love.graphics.setFont(comfortana)
 end
 
@@ -58,7 +66,7 @@ end
 function button(text, x, y, width, height, color)
 	love.graphics.setColor(color)
 	love.graphics.rectangle("fill", x, y, width, height)
-	love.graphics.setColor(255, 255, 255)
+	love.graphics.setColor(1, 1, 1)
 	love.graphics.print(text, x + 20, y + 20)
 end
 

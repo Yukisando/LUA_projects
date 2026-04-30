@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "gameFolder",
+            "type": "pickString",
+            "description": "Pick a LÖVE game to play",
+            "options": [
+                "blindspot",
+                "bob",
+                "concron",
+                "diidle",
+                "golfgame",
+                "nanotank",
+                "neonrunner",
+                "NewGame",
+                "nodino",
+                "Yukiland"
+            ],
+            "default": "neonrunner"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "Play LÖVE game",
+            "type": "process",
+            "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe",
+            "args": [
+                "${workspaceFolder}/${input:gameFolder}"
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        { "label": "Play: blindspot",   "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/blindspot"],   "problemMatcher": [] },
+        { "label": "Play: bob",         "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/bob"],         "problemMatcher": [] },
+        { "label": "Play: concron",     "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/concron"],     "problemMatcher": [] },
+        { "label": "Play: diidle",      "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/diidle"],      "problemMatcher": [] },
+        { "label": "Play: golfgame",    "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/golfgame"],    "problemMatcher": [] },
+        { "label": "Play: nanotank",    "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/nanotank"],    "problemMatcher": [] },
+        { "label": "Play: neonrunner",  "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/neonrunner"],  "problemMatcher": [] },
+        { "label": "Play: NewGame",     "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/NewGame"],     "problemMatcher": [] },
+        { "label": "Play: nodino",      "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/nodino"],      "problemMatcher": [] },
+        { "label": "Play: Yukiland",    "type": "process", "command": "${workspaceFolder}/LoveToAndroid/tools/love-win/love.exe", "args": ["${workspaceFolder}/Yukiland"],    "problemMatcher": [] }
+    ]
+}

@@ -1,6 +1,0 @@
-## Interface: 6.2.4.21742
-## Title: 
-## Version: 0.8
-## Notes:
-## Author: Yukisan
-## URL: www.nathandecastro.uk
